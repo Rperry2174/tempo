@@ -12,7 +12,7 @@ AI skills for documentation and maintenance workflows in the Tempo repository. F
 | PR pipeline | `/docs-workflow` | Run check, write, and review end-to-end |
 | Audience fit | `/persona-check` | Check whether content matches its intended audience |
 | Vendor conflicts | `/fix-vendor-conflicts` | Resolve `vendor/` conflicts during a merge, rebase, or dependency upgrade |
-| Go version update | `/update-go-version` | Update Go version across go.mod, Dockerfile, CI workflows, and tools |
+| Go version update | `/update-go-version` | Update Go version across go.mod, the Dockerfiles, and the tools image tag |
 | SemBr reformat | `/sembr-reformat` | Reformat prose with [Semantic Line Breaks](https://sembr.org) without changing rendered output |
 
 ## Set up
@@ -53,7 +53,12 @@ Use `/docs-workflow` to run the full pipeline, or invoke each step individually.
 
 - *Vendor conflicts* — `/fix-vendor-conflicts`. Resolve `vendor/` directory conflicts during a merge, rebase, or dependency upgrade on main or release branches.
 
-- *Go version update* — `/update-go-version`. Update the Go version across all relevant files: `go.mod`, `tools/go.mod`, Dockerfile, CI workflows, and the tools image tag.
+- *Go version update* — `/update-go-version`.
+  Update the Go version across all relevant files:
+  `go.mod`, `tools/go.mod`, `tools/Dockerfile`, `cmd/tempo/Dockerfile_debug`,
+  and the tools image tag in `build/tools.mk`.
+  CI workflows aren't in that list on purpose —
+  they resolve the version through `go-version-file`.
 
 - *SemBr reformat* — `/sembr-reformat`.
   Reformat prose using [Semantic Line Breaks](https://sembr.org)
