@@ -1,0 +1,13 @@
+=== RUN   TestProcessAttributesTruncationReleasesOriginal
+    distributor_test.go:1220: 
+        	Error Trace:	/workspace/modules/distributor/distributor_test.go:1220
+        	Error:      	Expected and actual point to the same object: 0xc000900000 (*uint8)(0xc000900000)
+        	Test:       	TestProcessAttributesTruncationReleasesOriginal
+    distributor_test.go:1221: 
+        	Error Trace:	/workspace/modules/distributor/distributor_test.go:1221
+        	Error:      	Expected and actual point to the same object: 0xc000900000 (*uint8)(0xc000900000)
+        	Test:       	TestProcessAttributesTruncationReleasesOriginal
+--- FAIL: TestProcessAttributesTruncationReleasesOriginal (0.00s)
+FAIL
+FAIL	github.com/grafana/tempo/modules/distributor	0.029s
+FAIL

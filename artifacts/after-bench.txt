@@ -1,0 +1,15 @@
+goos: linux
+goarch: amd64
+pkg: github.com/grafana/tempo/modules/distributor
+cpu: Intel(R) Xeon(R) Processor
+BenchmarkProcessAttributes/within_limit-8         	  950427	      1116 ns/op	    1440 B/op	      61 allocs/op
+BenchmarkProcessAttributes/within_limit-8         	  929743	      1108 ns/op	    1440 B/op	      61 allocs/op
+BenchmarkProcessAttributes/within_limit-8         	  970500	      1145 ns/op	    1440 B/op	      61 allocs/op
+BenchmarkProcessAttributes/value_truncated-8      	  228820	      5039 ns/op	   21920 B/op	      81 allocs/op
+BenchmarkProcessAttributes/value_truncated-8      	  208833	      5016 ns/op	   21920 B/op	      81 allocs/op
+BenchmarkProcessAttributes/value_truncated-8      	  229617	      5039 ns/op	   21920 B/op	      81 allocs/op
+BenchmarkProcessAttributes/key_and_value_truncated-8         	  139178	      8700 ns/op	   42400 B/op	     101 allocs/op
+BenchmarkProcessAttributes/key_and_value_truncated-8         	  132925	      8717 ns/op	   42400 B/op	     101 allocs/op
+BenchmarkProcessAttributes/key_and_value_truncated-8         	  138274	      8832 ns/op	   42400 B/op	     101 allocs/op
+PASS
+ok  	github.com/grafana/tempo/modules/distributor	10.704s

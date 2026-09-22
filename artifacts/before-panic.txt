@@ -1,0 +1,26 @@
+=== RUN   TestProcessAttributesWithoutValue
+=== RUN   TestProcessAttributesWithoutValue/resource_attribute
+--- FAIL: TestProcessAttributesWithoutValue (0.00s)
+    --- FAIL: TestProcessAttributesWithoutValue/resource_attribute (0.00s)
+panic: runtime error: invalid memory address or nil pointer dereference [recovered, repanicked]
+[signal SIGSEGV: segmentation violation code=0x1 addr=0x0 pc=0x2b7007e]
+
+goroutine 139 [running]:
+testing.tRunner.func1.2({0x2fe7580, 0x5c7e560})
+	/home/ubuntu/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.25.9.linux-amd64/src/testing/testing.go:1872 +0x237
+testing.tRunner.func1()
+	/home/ubuntu/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.25.9.linux-amd64/src/testing/testing.go:1875 +0x35b
+panic({0x2fe7580?, 0x5c7e560?})
+	/home/ubuntu/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.25.9.linux-amd64/src/runtime/panic.go:783 +0x132
+github.com/grafana/tempo/modules/distributor.processAttributes({0xc000a08840, 0x2, 0xc0000c8d70?}, 0xa, 0xc0006a6780, {0x372fedc, 0x8})
+	/workspace/modules/distributor/distributor.go:875 +0x17e
+github.com/grafana/tempo/modules/distributor.requestsByTraceID({0xc0006b5f58, 0x1, 0x516fd68?}, {0x37205fb, 0x4}, 0x1, 0xa)
+	/workspace/modules/distributor/distributor.go:749 +0x265
+github.com/grafana/tempo/modules/distributor.TestProcessAttributesWithoutValue.func8(0xc000583880)
+	/workspace/modules/distributor/distributor_test.go:1190 +0x12c
+testing.tRunner(0xc000583880, 0xc000a01e20)
+	/home/ubuntu/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.25.9.linux-amd64/src/testing/testing.go:1934 +0xea
+created by testing.(*T).Run in goroutine 138
+	/home/ubuntu/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.25.9.linux-amd64/src/testing/testing.go:1997 +0x465
+FAIL	github.com/grafana/tempo/modules/distributor	0.029s
+FAIL
