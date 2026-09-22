@@ -1123,6 +1123,16 @@ func TestProcessAttributes(t *testing.T) {
 	}
 }
 
+// maxValuelessAttrByte is comfortably longer than the short keys used by
+// TestProcessAttributesWithoutValue, so only the case that asks for truncation
+// gets it.
+const maxValuelessAttrByte = 32
+
+func spanAttrBatch(s *v1.Span, attrs []*v1_common.KeyValue) *v1.ResourceSpans {
+	s.Attributes = attrs
+	return &v1.ResourceSpans{ScopeSpans: []*v1.ScopeSpans{{Spans: []*v1.Span{s}}}}
+}
+
 func TestProcessAttributesWithoutValue(t *testing.T) {
 	// A KeyValue carries its value as an optional embedded message, so an attribute
 	// with no value at all decodes to a nil Value. Reaching the oneof through the
@@ -1132,51 +1142,61 @@ func TestProcessAttributesWithoutValue(t *testing.T) {
 		return &v1_common.KeyValue{Key: "empty-value", Value: &v1_common.AnyValue{}}
 	}
 
+	// An oversized key must still be truncated when the attribute has no value.
+	longKey := strings.Repeat("k", 2*maxValuelessAttrByte)
+
 	tests := []struct {
-		name  string
-		batch func(*v1.Span) *v1.ResourceSpans
+		name          string
+		attrs         []*v1_common.KeyValue
+		batch         func(*v1.Span, []*v1_common.KeyValue) *v1.ResourceSpans
+		wantTruncated int
 	}{
 		{
-			name: "resource attribute",
-			batch: func(s *v1.Span) *v1.ResourceSpans {
+			name:  "resource attribute",
+			attrs: []*v1_common.KeyValue{noValue(), emptyValue()},
+			batch: func(s *v1.Span, attrs []*v1_common.KeyValue) *v1.ResourceSpans {
 				return &v1.ResourceSpans{
-					Resource:   &v1_resource.Resource{Attributes: []*v1_common.KeyValue{noValue(), emptyValue()}},
+					Resource:   &v1_resource.Resource{Attributes: attrs},
 					ScopeSpans: []*v1.ScopeSpans{{Spans: []*v1.Span{s}}},
 				}
 			},
 		},
 		{
-			name: "scope attribute",
-			batch: func(s *v1.Span) *v1.ResourceSpans {
+			name:  "scope attribute",
+			attrs: []*v1_common.KeyValue{noValue(), emptyValue()},
+			batch: func(s *v1.Span, attrs []*v1_common.KeyValue) *v1.ResourceSpans {
 				return &v1.ResourceSpans{ScopeSpans: []*v1.ScopeSpans{{
-					Scope: &v1_common.InstrumentationScope{
-						Name:       "scope",
-						Attributes: []*v1_common.KeyValue{noValue(), emptyValue()},
-					},
+					Scope: &v1_common.InstrumentationScope{Name: "scope", Attributes: attrs},
 					Spans: []*v1.Span{s},
 				}}}
 			},
 		},
 		{
-			name: "span attribute",
-			batch: func(s *v1.Span) *v1.ResourceSpans {
-				s.Attributes = []*v1_common.KeyValue{noValue(), emptyValue()}
+			name:  "span attribute",
+			attrs: []*v1_common.KeyValue{noValue(), emptyValue()},
+			batch: spanAttrBatch,
+		},
+		{
+			name:  "event attribute",
+			attrs: []*v1_common.KeyValue{noValue(), emptyValue()},
+			batch: func(s *v1.Span, attrs []*v1_common.KeyValue) *v1.ResourceSpans {
+				s.Events = []*v1.Span_Event{{Attributes: attrs}}
 				return &v1.ResourceSpans{ScopeSpans: []*v1.ScopeSpans{{Spans: []*v1.Span{s}}}}
 			},
 		},
 		{
-			name: "event attribute",
-			batch: func(s *v1.Span) *v1.ResourceSpans {
-				s.Events = []*v1.Span_Event{{Attributes: []*v1_common.KeyValue{noValue(), emptyValue()}}}
+			name:  "link attribute",
+			attrs: []*v1_common.KeyValue{noValue(), emptyValue()},
+			batch: func(s *v1.Span, attrs []*v1_common.KeyValue) *v1.ResourceSpans {
+				s.Links = []*v1.Span_Link{{Attributes: attrs}}
 				return &v1.ResourceSpans{ScopeSpans: []*v1.ScopeSpans{{Spans: []*v1.Span{s}}}}
 			},
 		},
 		{
-			name: "link attribute",
-			batch: func(s *v1.Span) *v1.ResourceSpans {
-				s.Links = []*v1.Span_Link{{Attributes: []*v1_common.KeyValue{noValue(), emptyValue()}}}
-				return &v1.ResourceSpans{ScopeSpans: []*v1.ScopeSpans{{Spans: []*v1.Span{s}}}}
-			},
+			name:          "oversized key without value",
+			attrs:         []*v1_common.KeyValue{{Key: longKey}},
+			batch:         spanAttrBatch,
+			wantTruncated: 1,
 		},
 	}
 
@@ -1187,10 +1207,11 @@ func TestProcessAttributesWithoutValue(t *testing.T) {
 				SpanId:  []byte{0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08},
 			}
 
-			_, traces, truncated, _, err := requestsByTraceID([]*v1.ResourceSpans{tt.batch(span)}, "test", 1, 10)
+			batches := []*v1.ResourceSpans{tt.batch(span, tt.attrs)}
+			_, traces, truncated, _, err := requestsByTraceID(batches, "test", 1, maxValuelessAttrByte)
 			require.NoError(t, err)
 			require.Len(t, traces, 1)
-			assert.Equal(t, 0, truncated.Total())
+			assert.Equal(t, tt.wantTruncated, truncated.Total())
 		})
 	}
 }
