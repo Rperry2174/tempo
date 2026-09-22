@@ -3,6 +3,7 @@ package distributor
 import (
 	"encoding/binary"
 	"fmt"
+	"strings"
 	"testing"
 
 	v1_common "github.com/grafana/tempo/pkg/tempopb/common/v1"
@@ -42,6 +43,47 @@ func makeRebatchRequest(numTraces, spansPerTrace int) ([]*v1.ResourceSpans, int)
 			},
 		},
 	}, spanCount
+}
+
+// BenchmarkProcessAttributes covers the two shapes of the per-span attribute
+// pass: the common case where nothing exceeds the limit, and the case where
+// every attribute has to be truncated.
+func BenchmarkProcessAttributes(b *testing.B) {
+	const maxAttrSize = 1024
+
+	cases := []struct {
+		name    string
+		keyLen  int
+		valLen  int
+		attrs   int
+		wantCnt int
+	}{
+		{"within_limit", 16, 64, 20, 0},
+		{"value_truncated", 16, 64 * 1024, 20, 20},
+		{"key_and_value_truncated", 64 * 1024, 64 * 1024, 20, 40},
+	}
+
+	for _, tc := range cases {
+		b.Run(tc.name, func(b *testing.B) {
+			key := strings.Repeat("k", tc.keyLen)
+			val := strings.Repeat("v", tc.valLen)
+
+			b.ReportAllocs()
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				attrs := make([]*v1_common.KeyValue, 0, tc.attrs)
+				for j := 0; j < tc.attrs; j++ {
+					attrs = append(attrs, &v1_common.KeyValue{
+						Key:   key,
+						Value: &v1_common.AnyValue{Value: &v1_common.AnyValue_StringValue{StringValue: val}},
+					})
+				}
+				if got := processAttributes(attrs, maxAttrSize, nil, "span"); got != tc.wantCnt {
+					b.Fatalf("truncated %d attributes, want %d", got, tc.wantCnt)
+				}
+			}
+		})
+	}
 }
 
 // BenchmarkRequestsByTraceIDScenarios covers normal prod-like traffic, a few

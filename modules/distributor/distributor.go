@@ -7,6 +7,7 @@ import (
 	"math"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-kit/log"
@@ -864,7 +865,7 @@ func processAttributes(attributes []*v1_common.KeyValue, maxAttrSize int, trunca
 	for _, attr := range attributes {
 		if len(attr.Key) > maxAttrSize {
 			origSize := len(attr.Key)
-			attr.Key = attr.Key[:maxAttrSize]
+			attr.Key = truncate(attr.Key, maxAttrSize)
 			if truncationExample != nil && truncationExample.origSize == 0 { // only capture the first truncation
 				// name is the truncated prefix; origSize records the full original length.
 				*truncationExample = truncatedAttrInfo{scope: scope, name: attr.Key, field: "key", origSize: origSize}
@@ -872,13 +873,15 @@ func processAttributes(attributes []*v1_common.KeyValue, maxAttrSize int, trunca
 			count++
 		}
 
-		switch value := attr.GetValue().Value.(type) {
+		// An attribute may arrive with no value at all, which leaves KeyValue.Value nil.
+		// The oneof has to be reached through the nil-safe getter on both hops.
+		switch value := attr.GetValue().GetValue().(type) {
 		case *v1_common.AnyValue_StringValue:
 			if len(value.StringValue) > maxAttrSize {
 				if truncationExample != nil && truncationExample.origSize == 0 { // only capture the first truncation
 					*truncationExample = truncatedAttrInfo{scope: scope, name: attr.Key, field: "value", origSize: len(value.StringValue)}
 				}
-				value.StringValue = value.StringValue[:maxAttrSize]
+				value.StringValue = truncate(value.StringValue, maxAttrSize)
 				count++
 			}
 		default:
@@ -887,6 +890,14 @@ func processAttributes(attributes []*v1_common.KeyValue, maxAttrSize int, trunca
 	}
 
 	return count
+}
+
+// truncate returns the first maxBytes bytes of s in a right-sized allocation.
+// Slicing alone would leave the truncated attribute pointing into the full
+// oversized allocation, keeping it alive for as long as the rebatched span is
+// referenced, so truncation would cap the wire size without reclaiming memory.
+func truncate(s string, maxBytes int) string {
+	return strings.Clone(s[:maxBytes])
 }
 
 func metricSpans(batches []*v1.ResourceSpans, tenantID string, cfg *MetricReceivedSpansConfig) {

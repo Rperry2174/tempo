@@ -1,0 +1,23 @@
+$ go test ./modules/distributor/ -count=1 -run 'TestProcessAttributes' -v
+
+--- PASS: TestProcessAttributes (0.00s)
+--- PASS: TestProcessAttributesWithoutValue (0.00s)
+    --- PASS: TestProcessAttributesWithoutValue/resource_attribute (0.00s)
+    --- PASS: TestProcessAttributesWithoutValue/scope_attribute (0.00s)
+    --- PASS: TestProcessAttributesWithoutValue/span_attribute (0.00s)
+    --- PASS: TestProcessAttributesWithoutValue/event_attribute (0.00s)
+    --- PASS: TestProcessAttributesWithoutValue/link_attribute (0.00s)
+    --- PASS: TestProcessAttributesWithoutValue/oversized_key_without_value (0.00s)
+--- PASS: TestProcessAttributesTruncationReleasesOriginal (0.00s)
+--- PASS: TestProcessAttributesDetail (0.00s)
+PASS
+ok  	github.com/grafana/tempo/modules/distributor	0.033s
+
+$ go test -race ./modules/distributor/...
+
+ok  	github.com/grafana/tempo/modules/distributor	3.998s
+ok  	github.com/grafana/tempo/modules/distributor/forwarder	1.088s
+ok  	github.com/grafana/tempo/modules/distributor/forwarder/otlpgrpc	1.048s
+ok  	github.com/grafana/tempo/modules/distributor/queue	1.025s
+ok  	github.com/grafana/tempo/modules/distributor/receiver	1.110s
+ok  	github.com/grafana/tempo/modules/distributor/usage	1.052s

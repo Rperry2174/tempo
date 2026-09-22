@@ -15,6 +15,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unsafe"
 
 	kitlog "github.com/go-kit/log"
 	"github.com/gogo/status"
@@ -1120,6 +1121,124 @@ func TestProcessAttributes(t *testing.T) {
 
 		}
 	}
+}
+
+func TestProcessAttributesWithoutValue(t *testing.T) {
+	// Comfortably longer than the short keys below, so only the case that asks
+	// for truncation gets it.
+	const maxAttrByte = 32
+
+	// A KeyValue carries its value as an optional embedded message, so an attribute
+	// with no value at all decodes to a nil Value. Reaching the oneof through the
+	// Value field instead of the getter crashes the whole distributor on such a span.
+	noValue := func() *v1_common.KeyValue { return &v1_common.KeyValue{Key: "no-value"} }
+	emptyValue := func() *v1_common.KeyValue {
+		return &v1_common.KeyValue{Key: "empty-value", Value: &v1_common.AnyValue{}}
+	}
+
+	spanAttrBatch := func(s *v1.Span, attrs []*v1_common.KeyValue) *v1.ResourceSpans {
+		s.Attributes = attrs
+		return &v1.ResourceSpans{ScopeSpans: []*v1.ScopeSpans{{Spans: []*v1.Span{s}}}}
+	}
+
+	// An oversized key must still be truncated when the attribute has no value.
+	longKey := strings.Repeat("k", 2*maxAttrByte)
+
+	tests := []struct {
+		name          string
+		attrs         []*v1_common.KeyValue
+		batch         func(*v1.Span, []*v1_common.KeyValue) *v1.ResourceSpans
+		wantTruncated int
+	}{
+		{
+			name:  "resource attribute",
+			attrs: []*v1_common.KeyValue{noValue(), emptyValue()},
+			batch: func(s *v1.Span, attrs []*v1_common.KeyValue) *v1.ResourceSpans {
+				return &v1.ResourceSpans{
+					Resource:   &v1_resource.Resource{Attributes: attrs},
+					ScopeSpans: []*v1.ScopeSpans{{Spans: []*v1.Span{s}}},
+				}
+			},
+		},
+		{
+			name:  "scope attribute",
+			attrs: []*v1_common.KeyValue{noValue(), emptyValue()},
+			batch: func(s *v1.Span, attrs []*v1_common.KeyValue) *v1.ResourceSpans {
+				return &v1.ResourceSpans{ScopeSpans: []*v1.ScopeSpans{{
+					Scope: &v1_common.InstrumentationScope{Name: "scope", Attributes: attrs},
+					Spans: []*v1.Span{s},
+				}}}
+			},
+		},
+		{
+			name:  "span attribute",
+			attrs: []*v1_common.KeyValue{noValue(), emptyValue()},
+			batch: spanAttrBatch,
+		},
+		{
+			name:  "event attribute",
+			attrs: []*v1_common.KeyValue{noValue(), emptyValue()},
+			batch: func(s *v1.Span, attrs []*v1_common.KeyValue) *v1.ResourceSpans {
+				s.Events = []*v1.Span_Event{{Attributes: attrs}}
+				return &v1.ResourceSpans{ScopeSpans: []*v1.ScopeSpans{{Spans: []*v1.Span{s}}}}
+			},
+		},
+		{
+			name:  "link attribute",
+			attrs: []*v1_common.KeyValue{noValue(), emptyValue()},
+			batch: func(s *v1.Span, attrs []*v1_common.KeyValue) *v1.ResourceSpans {
+				s.Links = []*v1.Span_Link{{Attributes: attrs}}
+				return &v1.ResourceSpans{ScopeSpans: []*v1.ScopeSpans{{Spans: []*v1.Span{s}}}}
+			},
+		},
+		{
+			name:          "oversized key without value",
+			attrs:         []*v1_common.KeyValue{{Key: longKey}},
+			batch:         spanAttrBatch,
+			wantTruncated: 1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			span := &v1.Span{
+				TraceId: []byte{0x0A, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F},
+				SpanId:  []byte{0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08},
+			}
+
+			batches := []*v1.ResourceSpans{tt.batch(span, tt.attrs)}
+			_, traces, truncated, _, err := requestsByTraceID(batches, "test", 1, maxAttrByte)
+			require.NoError(t, err)
+			require.Len(t, traces, 1)
+			assert.Equal(t, tt.wantTruncated, truncated.Total())
+		})
+	}
+}
+
+func TestProcessAttributesTruncationReleasesOriginal(t *testing.T) {
+	const (
+		maxAttrByte = 16
+		origSize    = 1 << 20
+	)
+	longString := strings.Repeat("t", origSize)
+
+	attrs := []*v1_common.KeyValue{
+		test.MakeAttribute("long value", longString),
+		test.MakeAttribute(longString, "long key"),
+	}
+	origValueData := unsafe.StringData(attrs[0].Value.GetStringValue())
+	origKeyData := unsafe.StringData(attrs[1].Key)
+
+	require.Equal(t, 2, processAttributes(attrs, maxAttrByte, nil, "span"))
+	require.Len(t, attrs[0].Value.GetStringValue(), maxAttrByte)
+	require.Len(t, attrs[1].Key, maxAttrByte)
+
+	// Truncating by slicing keeps a pointer into the original allocation, so the
+	// full oversized attribute stays on the heap for as long as the rebatched span
+	// is referenced and truncation reclaims nothing. The truncated strings must
+	// therefore own their own, correctly sized backing array.
+	assert.NotSame(t, origValueData, unsafe.StringData(attrs[0].Value.GetStringValue()))
+	assert.NotSame(t, origKeyData, unsafe.StringData(attrs[1].Key))
 }
 
 func TestRequestsByTraceID_TruncationDetail(t *testing.T) {

@@ -1,0 +1,7 @@
+=== RUN   TestZZHeapMeasurement
+    zz_heap_probe_test.go:73: oversized attribute bytes pushed:          52428800
+    zz_heap_probe_test.go:74: attribute bytes after truncation:             25600
+    zz_heap_probe_test.go:75: live heap held by rebatched traces:        52485768
+--- PASS: TestZZHeapMeasurement (0.03s)
+PASS
+ok  	github.com/grafana/tempo/modules/distributor	(cached)
