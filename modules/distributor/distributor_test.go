@@ -1123,17 +1123,11 @@ func TestProcessAttributes(t *testing.T) {
 	}
 }
 
-// maxValuelessAttrByte is comfortably longer than the short keys used by
-// TestProcessAttributesWithoutValue, so only the case that asks for truncation
-// gets it.
-const maxValuelessAttrByte = 32
-
-func spanAttrBatch(s *v1.Span, attrs []*v1_common.KeyValue) *v1.ResourceSpans {
-	s.Attributes = attrs
-	return &v1.ResourceSpans{ScopeSpans: []*v1.ScopeSpans{{Spans: []*v1.Span{s}}}}
-}
-
 func TestProcessAttributesWithoutValue(t *testing.T) {
+	// Comfortably longer than the short keys below, so only the case that asks
+	// for truncation gets it.
+	const maxAttrByte = 32
+
 	// A KeyValue carries its value as an optional embedded message, so an attribute
 	// with no value at all decodes to a nil Value. Reaching the oneof through the
 	// Value field instead of the getter crashes the whole distributor on such a span.
@@ -1142,8 +1136,13 @@ func TestProcessAttributesWithoutValue(t *testing.T) {
 		return &v1_common.KeyValue{Key: "empty-value", Value: &v1_common.AnyValue{}}
 	}
 
+	spanAttrBatch := func(s *v1.Span, attrs []*v1_common.KeyValue) *v1.ResourceSpans {
+		s.Attributes = attrs
+		return &v1.ResourceSpans{ScopeSpans: []*v1.ScopeSpans{{Spans: []*v1.Span{s}}}}
+	}
+
 	// An oversized key must still be truncated when the attribute has no value.
-	longKey := strings.Repeat("k", 2*maxValuelessAttrByte)
+	longKey := strings.Repeat("k", 2*maxAttrByte)
 
 	tests := []struct {
 		name          string
@@ -1208,7 +1207,7 @@ func TestProcessAttributesWithoutValue(t *testing.T) {
 			}
 
 			batches := []*v1.ResourceSpans{tt.batch(span, tt.attrs)}
-			_, traces, truncated, _, err := requestsByTraceID(batches, "test", 1, maxValuelessAttrByte)
+			_, traces, truncated, _, err := requestsByTraceID(batches, "test", 1, maxAttrByte)
 			require.NoError(t, err)
 			require.Len(t, traces, 1)
 			assert.Equal(t, tt.wantTruncated, truncated.Total())
